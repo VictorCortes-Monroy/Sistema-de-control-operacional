@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Worker {
+  worker_id          String    @id @default(uuid())
+  rut                String    @unique
+  full_name          String
+  active             Boolean   @default(true)
+  created_at         DateTime  @default(now())
+  created_by_user_id String?
+  updated_at         DateTime  @updatedAt
+  updated_by_user_id String?
+  
+  // Relations
+  employments        WorkerEmployment[]
+  union_memberships  WorkerUnionMembership[]
+  shift_assignments  WorkerShiftAssignment[]
+  leave_requests     LeaveRequest[]
+  permission_requests PermissionRequest[]
+  attendance_marks   AttendanceMark[]
+  attendance_daily   AttendanceDaily[]
+  
+  created_by         UserAccount? @relation("WorkerCreatedBy", fields: [created_by_user_id], references: [user_id])
+  updated_by         UserAccount? @relation("WorkerUpdatedBy", fields: [updated_by_user_id], references: [user_id])
+}
+
+model UserAccount {
+  user_id    String   @id @default(uuid())
+  email      String   @unique
+  full_name  String
+  role       String   // ADMIN, RRHH, SUPERVISOR, OPERACIONES, GERENCIA
+  active     Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  // Reverse Relations
+  workers_created         Worker[] @relation("WorkerCreatedBy")
+  workers_updated         Worker[] @relation("WorkerUpdatedBy")
+  employments_created     WorkerEmployment[]
+  unions_created          WorkerUnionMembership[]
+  calendars_created       ShiftCycleCalendar[]
+  assignments_created     WorkerShiftAssignment[]
+  leaves_created          LeaveRequest[]
+  permissions_created     PermissionRequest[]
+  marks_captured          AttendanceMark[]
+  daily_created           AttendanceDaily[] @relation("DailyCreatedBy")
+  daily_updated           AttendanceDaily[] @relation("DailyUpdatedBy")
+  audit_logs              AuditLog[]
+}
+
+model WorkerEmployment {
+  employment_id      String   @id @default(uuid())
+  worker_id          String
+  contract_type      String
+  hire_date          DateTime
+  termination_date   DateTime?
+  status             String   // VIGENTE, TERMINADO, SUSPENDIDO
+  created_at         DateTime @default(now())
+  created_by_user_id String?
+
+  worker     Worker      @relation(fields: [worker_id], references: [worker_id])
+  created_by UserAccount? @relation(fields: [created_by_user_id], references: [user_id])
+}
+
+model WorkerUnionMembership {
+  union_membership_id String   @id @default(uuid())
+  worker_id           String
+  union_name          String
+  start_date          DateTime
+  end_date            DateTime?
+  created_at          DateTime @default(now())
+  created_by_user_id  String?
+
+  worker     Worker      @relation(fields: [worker_id], references: [worker_id])
+  created_by UserAccount? @relation(fields: [created_by_user_id], references: [user_id])
+}
+
+model ShiftGroup {
+  shift_group_id String @id @default(uuid())
+  code           String @unique // A, B
+  name           String
+  cycle_days     Int    @default(10)
+
+  calendars      ShiftCycleCalendar[]
+  assignments    WorkerShiftAssignment[]
+  daily_attendance AttendanceDaily[]
+}
+
+model ShiftCycleCalendar {
+  cal_id                String   @id @default(uuid())
+  date                  DateTime @unique
+  active_shift_group_id String
+  cycle_number          Int
+  cycle_day             Int      // 1..10
+  created_at            DateTime @default(now())
+  created_by_user_id    String?
+
+  shift_group ShiftGroup   @relation(fields: [active_shift_group_id], references: [shift_group_id])
+  created_by  UserAccount? @relation(fields: [created_by_user_id], references: [user_id])
+}
+
+model WorkerShiftAssignment {
+  assignment_id      String   @id @default(uuid())
+  worker_id          String
+  shift_group_id     String
+  start_date         DateTime
+  end_date           DateTime?
+  reason             String?
+  created_at         DateTime @default(now())
+  created_by_user_id String?
+
+  worker      Worker       @relation(fields: [worker_id], references: [worker_id])
+  shift_group ShiftGroup   @relation(fields: [shift_group_id], references: [shift_group_id])
+  created_by  UserAccount? @relation(fields: [created_by_user_id], references: [user_id])
+}
+
+model LeaveType {
+  leave_type_id     String   @id @default(uuid())
+  code              String   @unique // LM, VAC
+  name              String
+  blocks_attendance Boolean
+
+  requests LeaveRequest[]
+}
+
+model LeaveRequest {
+  leave_id           String   @id @default(uuid())
+  worker_id          String
+  leave_type_id      String
+  start_date         DateTime
+  end_date           DateTime
+  status             String   // REGISTRADA, APROBADA, RECHAZADA, ANULADA
+  document_ref       String?
+  created_at         DateTime @default(now())
+  created_by_user_id String?
+
+  worker     Worker       @relation(fields: [worker_id], references: [worker_id])
+  leave_type LeaveType    @relation(fields: [leave_type_id], references: [leave_type_id])
+  created_by UserAccount? @relation(fields: [created_by_user_id], references: [user_id])
+}
+
+model PermissionRequest {
+  permission_id      String   @id @default(uuid())
+  worker_id          String
+  date               DateTime
+  reason             String?
+  status             String   // REGISTRADO, APROBADO, RECHAZADO, ANULADO
+  created_at         DateTime @default(now())
+  created_by_user_id String?
+
+  worker     Worker       @relation(fields: [worker_id], references: [worker_id])
+  created_by UserAccount? @relation(fields: [created_by_user_id], references: [user_id])
+}
+
+model AttendanceMark {
+  mark_id             String   @id @default(uuid())
+  worker_id           String
+  timestamp           DateTime
+  mark_type           String   // IN, OUT, CHECK
+  source              String   // MANUAL, APP, QR, BIOMETRIA, API
+  captured_by_user_id String?
+  note                String?
+
+  worker      Worker       @relation(fields: [worker_id], references: [worker_id])
+  captured_by UserAccount? @relation(fields: [captured_by_user_id], references: [user_id])
+}
+
+model AttendanceDaily {
+  attendance_daily_id String   @id @default(uuid())
+  worker_id           String
+  date                DateTime
+  shift_group_id      String?
+  status              String   // PRESENTE, AUSENTE, PERMISO, LICENCIA, VACACIONES
+  status_reason       String?
+  source              String   // CALCULADO, MANUAL
+  locked              Boolean  @default(false)
+  created_at          DateTime @default(now())
+  created_by_user_id  String?
+  updated_at          DateTime @updatedAt
+  updated_by_user_id  String?
+
+  worker         Worker       @relation(fields: [worker_id], references: [worker_id])
+  shift_group    ShiftGroup?  @relation(fields: [shift_group_id], references: [shift_group_id])
+  created_by     UserAccount? @relation("DailyCreatedBy", fields: [created_by_user_id], references: [user_id])
+  updated_by     UserAccount? @relation("DailyUpdatedBy", fields: [updated_by_user_id], references: [user_id])
+}
+
+model AuditLog {
+  audit_id           String   @id @default(uuid())
+  entity_name        String
+  entity_id          String
+  action             String   // CREATE, UPDATE, DELETE
+  changed_by_user_id String?
+  changed_at         DateTime @default(now())
+  diff_json          String?
+
+  changed_by UserAccount? @relation(fields: [changed_by_user_id], references: [user_id])
+}
